@@ -21,49 +21,32 @@ class CuckooFilter():
         """TODO: better fingerprint function"""
 
     def __str__(self):
-        return "\n".join([str(i)+" : "+str(self.hashtable[i]) for i in range(self.length)])
+        return "\n".join([str(i)+" : "+str(self.hashtable[i])
+                            for i in range(self.length)])
+
 
     def add(self, item):
-        failure = self._iteradd(item, None, 0)
-        if failure != 0:
-            fails.append(item)
-            itemhash1, itemhash2, itemfprint = self.gethashes_and_fprint(item)
-            '''print("""
-            Insertion of {} failed, data structure is FULL.
-            Hashes: {} {}; fingerprint: {}
-            Contents: {}
-                      {}""".format(item, itemhash1, itemhash2, itemfprint,
-                                    self.hashtable[itemhash1], self.hashtable[itemhash2]))'''
+        failure = self._iteradd(item, 0, None)
+        if failure:
+            print("Insertion of {} failed, data structure is FULL."
+                                                                .format(item))
 
-    def _iteradd(self, item, bumped_location, num_attempts):
-        itemhash1, itemhash2, itemfprint = self.gethashes_and_fprint(item)
+    def _iteradd(self, item, num_attempts, bumped_location):
+        itemfprint = self.fingerprint(item)
+        newhash = self.switchhash(itemfprint, bumped_location)
 
-        if bumped_location != itemhash1:
-            failedinsert = self.hashtable[itemhash1].add(itemfprint)
-            if failedinsert == 0:
-                return 0
-
-        if bumped_location != itemhash2:
-            failedinsert = self.hashtable[itemhash2].add(itemfprint)
-            if failedinsert == 0:
-                return 0
+        failedinsert = self.hashtable[newhash].add(itemfprint)
+        if not failedinsert:
+            return 0
 
         """If both insertion attempts fail, bump an element out of the
             second position and reinsert it somewhere else."""
         if num_attempts >= self.maxinsertiontime:
             return 1
-        if bumped_location != itemhash1:
-                nextitem = self.hashtable[itemhash2].pop()
-                shouldbeok = self.hashtable[itemhash2].add(itemfprint)
-                if shouldbeok != 0:
-                    print("Add failed after deletion, this shouldn't have happened lol.")
-                return self._iteradd(nextitem, itemhash2, num_attempts + 1,)
-        else:
-                nextitem = self.hashtable[itemhash1].pop()
-                shouldbeok = self.hashtable[itemhash1].add(itemfprint)
-                if shouldbeok != 0:
-                    print("Add failed after deletion, this shouldn't have happened lol.")
-                return self._iteradd(nextitem, itemhash1, num_attempts + 1, )
+
+        nextitem = self.hashtable[newhash].pop()
+        shouldbeok = self.hashtable[newhash].add(itemfprint)
+        return self._iteradd(item, num_attempts + 1, newhash)
 
     def remove(self, item):
         itemhash1, itemhash2, itemfprint = self.gethashes_and_fprint(item)
@@ -73,10 +56,12 @@ class CuckooFilter():
         else:
             self.hashtable[itemhash2].remove(itemfprint)
 
+
     def query(self, item):
         itemhash1, itemhash2, itemfprint = self.gethashes_and_fprint(item)
 
-        if itemfprint in self.hashtable[itemhash1] or item in self.hashtable[itemhash2]:
+        if (itemfprint in self.hashtable[itemhash1] or
+            itemfprint in self.hashtable[itemhash2]):
             return True
         else:
             return False
@@ -88,15 +73,19 @@ class CuckooFilter():
             return hash(x) % length
         return hashfunction
 
+    def switchhash(self, itemfprint, itemhash1):
+        return (itemhash1 ^ self.hash(itemfprint)) % self.length
+
     def gethashes_and_fprint(self, item):
         itemhash1 = self.hash(item)
         itemfprint = self.fingerprint(item)
-        #print(itemhash1, itemfprint, self.hash(itemfprint))
-        itemhash2 = (itemhash1 ^ self.hash(itemfprint)) % self.length
+        itemhash2 = self.switchhas(itemfprint, itemhash1)
+
         if itemhash1 == itemhash2:
             itemhash2 = itemhash2 + 1 % self.length
 
         return itemhash1, itemhash2, itemfprint
+
 
 class Bucket(list):
     def __init__(self, members, bucketsize):
